@@ -119,7 +119,9 @@ def scrape_company(website_url: str, company_name: str = "") -> tuple[dict[str, 
     # Step 4: Fetch relevant pages (up to MAX_PAGES total including homepage)
     # ------------------------------------------------------------------ #
     fetched = 1 if homepage_text else 0
-    for url in prioritised:
+    # Pre-slice: never iterate more than MAX_PAGES candidates to avoid 100+ URL loops
+    seen_texts: set[int] = {hash(homepage_text)} if homepage_text else set()
+    for url in prioritised[:MAX_PAGES * 3]:
         if fetched >= MAX_PAGES:
             break
         if url in scraped:
@@ -127,6 +129,11 @@ def scrape_company(website_url: str, company_name: str = "") -> tuple[dict[str, 
         time.sleep(REQUEST_DELAY * 0.4)
         text, _ = _fetch_page(url, company_name)
         if text:
+            # Redirect dedup: skip if we already have this exact content (e.g. claas.it loop)
+            text_hash = hash(text[:500])
+            if text_hash in seen_texts:
+                continue
+            seen_texts.add(text_hash)
             scraped[url] = text
             fetched += 1
 
@@ -251,6 +258,7 @@ def _rank_links(links: list[str]) -> list[str]:
     about_links = about_links[:2]
     product_links = product_links[:2]
     brand_links = brand_links[:1]
+    others = others[:2]  # Cap others too — prevent massive sitemaps flooding remaining slots
 
     # Strict priority selection queue. The 6 MAX_PAGES cap enforces the cutoff.
     return contact_links + about_links + product_links + brand_links + others
