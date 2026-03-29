@@ -251,12 +251,12 @@ Content:
     try:
         parsed = _call_gemini(api_key, prompt)
         
-        # Validation
-        confidence = parsed.get("confidence", 0.0)
-        prods = parsed.get("products_detected", [])
-        if not prods and confidence > 0.7:
-            logger.warning("Gemini validation failed: Empty products but high confidence. Retrying once.")
-            parsed = _call_gemini(api_key, prompt) # trigger ONLY one manual retry inside try block
+        # Only retry if confirmed agri-manufacturer but products list is empty
+        # (avoids double calls on rejections and non-agri manufacturers)
+        if (parsed.get("is_agri_manufacturer") and 
+                not parsed.get("products_detected")):
+            logger.warning("Agri manufacturer with no products detected — retrying once.")
+            parsed = _call_gemini(api_key, prompt)
             
         final_confidence = parsed.get("confidence", 0.0)
         final_confidence = min(max(final_confidence, 0.0), 1.0)
